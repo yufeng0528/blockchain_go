@@ -1,3 +1,5 @@
 *.db
 *.dat
 blockchain_go.exe
+*.lock
+*.exe

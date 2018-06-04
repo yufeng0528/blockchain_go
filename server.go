@@ -9,6 +9,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"strings"
+
+	"github.com/c4pt0r/ini"
 )
 
 const protocol = "tcp"
@@ -17,7 +20,7 @@ const commandLength = 12
 
 var nodeAddress string
 var miningAddress string
-var knownNodes = []string{"localhost:3000"}
+var knownNodes []string
 var blocksInTransit = [][]byte{}
 var mempool = make(map[string]Transaction)
 
@@ -419,6 +422,12 @@ func handleConnection(conn net.Conn, bc *Blockchain) {
 
 // StartServer starts a node
 func StartServer(nodeID, minerAddress string) {
+	// 初始化knowNodes
+	var conf = ini.NewConf("config.cfg")
+	configNodes := conf.String("section_1", "knowNodes", "")
+	conf.Parse()
+	knownNodes = strings.Split(*configNodes, ",")
+
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
 	miningAddress = minerAddress
 	ln, err := net.Listen(protocol, nodeAddress)

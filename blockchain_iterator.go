@@ -14,6 +14,10 @@ type BlockchainIterator struct {
 
 // Next returns next block starting from the tip
 func (i *BlockchainIterator) Next() *Block {
+	if i.db == nil {
+		return nil
+	}
+
 	var block *Block
 
 	err := i.db.View(func(tx *bolt.Tx) error {

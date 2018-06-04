@@ -18,8 +18,9 @@ const genesisCoinbaseData = "The Times 03/Jan/2009 Chancellor on brink of second
 
 // Blockchain implements interactions with a DB
 type Blockchain struct {
-	tip []byte
-	db  *bolt.DB
+	tip    []byte
+	db     *bolt.DB
+	status bool
 }
 
 // CreateBlockchain creates a new blockchain DB
@@ -63,7 +64,7 @@ func CreateBlockchain(address, nodeID string) *Blockchain {
 		log.Panic(err)
 	}
 
-	bc := Blockchain{tip, db}
+	bc := Blockchain{tip, db, true}
 
 	return &bc
 }
@@ -73,7 +74,21 @@ func NewBlockchain(nodeID string) *Blockchain {
 	dbFile := fmt.Sprintf(dbFile, nodeID)
 	if dbExists(dbFile) == false {
 		fmt.Println("No existing blockchain found. Create one first.")
-		os.Exit(1)
+		db, err := bolt.Open(dbFile, 0600, nil)
+		if err != nil {
+			log.Panic(err)
+		}
+		err = db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte(blocksBucket))
+			if err != nil {
+				log.Panic(err)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Panic(err)
+		}
+		return &Blockchain{nil, db, false}
 	}
 
 	var tip []byte
@@ -92,7 +107,7 @@ func NewBlockchain(nodeID string) *Blockchain {
 		log.Panic(err)
 	}
 
-	bc := Blockchain{tip, db}
+	bc := Blockchain{tip, db, true}
 
 	return &bc
 }
@@ -112,17 +127,25 @@ func (bc *Blockchain) AddBlock(block *Block) {
 		if err != nil {
 			log.Panic(err)
 		}
-
 		lastHash := b.Get([]byte("l"))
 		lastBlockData := b.Get(lastHash)
-		lastBlock := DeserializeBlock(lastBlockData)
-
-		if block.Height > lastBlock.Height {
+		if lastBlockData == nil {
 			err = b.Put([]byte("l"), block.Hash)
 			if err != nil {
 				log.Panic(err)
 			}
 			bc.tip = block.Hash
+			bc.status = true
+		} else {
+			lastBlock := DeserializeBlock(lastBlockData)
+
+			if block.Height > lastBlock.Height {
+				err = b.Put([]byte("l"), block.Hash)
+				if err != nil {
+					log.Panic(err)
+				}
+				bc.tip = block.Hash
+			}
 		}
 
 		return nil
@@ -206,6 +229,9 @@ func (bc *Blockchain) Iterator() *BlockchainIterator {
 
 // GetBestHeight returns the height of the latest block
 func (bc *Blockchain) GetBestHeight() int {
+	if bc.status == false {
+		return 0
+	}
 	var lastBlock Block
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
